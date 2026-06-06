@@ -1,3 +1,5 @@
+export ForwardEulerIntegrator
+
 struct ForwardEulerIntegrator <: AbstractIntegrator end
 
 function evolve!(in::ForwardEulerIntegrator, sys::AbstractSystem, state::AbstractState, dt::Float64)

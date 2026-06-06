@@ -17,17 +17,12 @@ function main()
     in = ForwardEulerIntegrator()
     obs = KinematicErrorCheckingObserver(initial_pos, initial_vel, sys.a)
 
-    total_time = 100.0
+    total_time = 20.0
     dt = 0.01
 
-    measurements = simulate!(state, sys, in, obs, total_time, dt)
-
-    output_path = joinpath(@__DIR__, "output.json")
-    open(output_path, "w") do io
-        JSON3.write(io, measurements)
-    end
-
-    println("saved simulation data to: ", output_path)
+    sim = Simulation(state, sys, in, obs, total_time, dt)
+    launch_dashboard(sim)
+    readline()
 end
 
 main()
