@@ -88,19 +88,20 @@ function build_config_panel(ui_layout, initial_state::KinematicState)
     trigger = Observable(initial_state)
 
     on(update_btn.clicks) do _
+        safe_parse(s) = something(tryparse(Float64, s), 0.0)
         # Parse the 3D grid back into discrete Vector3D objects
         new_r = Vector3D(
-            parse(Float64, rx.displayed_string[]),
-            parse(Float64, ry.displayed_string[]),
-            parse(Float64, rz.displayed_string[])
+            safe_parse(rx.displayed_string[]),
+            safe_parse(ry.displayed_string[]),
+            safe_parse(rz.displayed_string[])
         )
         new_v = Vector3D(
-            parse(Float64, vx.displayed_string[]),
-            parse(Float64, vy.displayed_string[]),
-            parse(Float64, vz.displayed_string[])
+            safe_parse(vx.displayed_string[]),
+            safe_parse(vy.displayed_string[]),
+            safe_parse(vz.displayed_string[])
         )
-        new_floor = parse(Float64, floor_input.stored_string[])
 
+        new_floor = safe_parse(floor_input.stored_string[])
         trigger[] = KinematicState(new_r, new_v, new_floor)
     end
 
@@ -108,51 +109,30 @@ function build_config_panel(ui_layout, initial_state::KinematicState)
 end
 
 function render_scene!(ax::Axis3, history_obs::Observable, current_step_obs::Observable)
-    # Extract the full background simulated path (updates only on resimulation)
-    full_sim_path = lift(history_obs) do hist
-        return Point3f[Point3f(d.sim_r[1], d.sim_r[2], d.sim_r[3]) for d in hist]
+    full_sim_path = @lift [Point3f(d.sim_r) for d in $history_obs]
+
+    sim_trail = @lift begin
+        idx = clamp($current_step_obs, 1, length($history_obs))
+        [Point3f(d.sim_r) for d in @view $history_obs[1:idx]]
     end
 
-    # Active Blue Trail: Truncated from step 1 to the current slider position
-    sim_trail = lift(history_obs, current_step_obs) do hist, step
-        # Defensive check: Prevents out-of-bounds errors during asynchronous updates
-        idx = clamp(step, 1, length(hist))
-        return Point3f[Point3f(d.sim_r[1], d.sim_r[2], d.sim_r[3]) for d in hist[1:idx]]
+    exact_trail = @lift begin
+        idx = clamp($current_step_obs, 1, length($history_obs))
+        [Point3f(d.exact_r) for d in @view $history_obs[1:idx]]
     end
 
-    # Active Red Dash Trail: Analytical truth up to the current slider position
-    exact_trail = lift(history_obs, current_step_obs) do hist, step
-        idx = clamp(step, 1, length(hist))
-        return Point3f[Point3f(d.exact_r[1], d.exact_r[2], d.exact_r[3]) for d in hist[1:idx]]
+    particle_pos = @lift begin
+        idx = clamp($current_step_obs, 1, length($history_obs))
+        [Point3f($history_obs[idx].sim_r)]
     end
 
-    # Moving Particle: A single-element array containing the active coordinate
-    particle_pos = lift(history_obs, current_step_obs) do hist, step
-        idx = clamp(step, 1, length(hist))
-        p = hist[idx].sim_r
-        return [Point3f(p[1], p[2], p[3])]
-    end
+    launch_pos = @lift [Point3f($history_obs[1].sim_r)]
 
-    # Launch Point: Always matches the first index of the active dataset
-    launch_pos = lift(history_obs) do hist
-        p = hist[1].sim_r
-        return [Point3f(p[1], p[2], p[3])]
-    end
-
-    # Render a faint ghost trail of the overall arc to give visual context
     lines!(ax, full_sim_path, color = (:blue, 0.12), linewidth = 1)
-
-    # Render the bold historical lines drawn up to the current scrubber moment
     lines!(ax, sim_trail, color = :blue, linewidth = 4, label = "Simulated (Euler)")
     lines!(ax, exact_trail, color = :red, linewidth = 2, linestyle = :dash, label = "Analytical")
-
-    # Render a static green marker at the origin point
     scatter!(ax, launch_pos, color = :green, markersize = 12, marker = :circle, label = "Launch")
-
-    # Render the active physical object as a prominent magenta orb
     scatter!(ax, particle_pos, color = :magenta, markersize = 20, marker = :circle)
-
-    # This prevents duplicate legends from rendering if the axis layout updates
     axislegend(ax, position = :rt, framevisible = true, bgcolor = (:white, 0.85))
 
     return ax

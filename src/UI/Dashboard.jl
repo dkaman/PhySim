@@ -72,14 +72,24 @@ function launch_dashboard(base_sim::Simulation)
     on(state_update_trigger) do new_state
         fresh_sim = deepcopy(base_sim)
 
-        for field in fieldnames(typeof(fresh_sim.state))
-            setfield!(fresh_sim.state, field, getfield(new_state, field))
-        end
+        # Directly replace the state object (fast and type-stable)
+        fresh_sim.state = deepcopy(new_state)
 
         sync_observer!(fresh_sim.observer, fresh_sim.state)
-
         history_obs[] = simulate!(fresh_sim)
     end
+
+    # on(state_update_trigger) do new_state
+    #     fresh_sim = deepcopy(base_sim)
+
+    #     for field in fieldnames(typeof(fresh_sim.state))
+    #         setfield!(fresh_sim.state, field, getfield(new_state, field))
+    #     end
+
+    #     sync_observer!(fresh_sim.observer, fresh_sim.state)
+
+    #     history_obs[] = simulate!(fresh_sim)
+    # end
 
     on(history_obs) do _
         set_close_to!(time_slider, 1)
